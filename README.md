@@ -36,7 +36,7 @@ At its core, Joey leverages the power of **Google's Gemini Pro model** and the *
 
 Joey is built on a **Hub-and-Spoke** architecture, with a central **General Advisor Agent (Router)** orchestrating four specialized services.
 
-*(Please refer to the `docs/system_architecture.png` for a visual diagram)*
+![Joey System Architecture](docs/system_architecture.png)
 
 1.  **General Advisor Agent (Hub):** The main interface that understands user intent and routes tasks.
 2.  **Job Scout Service:** Handles external API interactions for job searching.
