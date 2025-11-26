@@ -1,0 +1,25 @@
+{
+  "basic_info": {
+    "name": "Chris",
+    "current_role": "Data Analyser",
+    "experience_years": 10
+  },
+  "preferences": {
+    "locations": [
+      "Sydney",
+      "Melbourne",
+      "Remote"
+    ],
+    "salary_expectation": "Permanent: 150k - 180k AUD (Package); Contract (Long-Term): $750 - $900/day; Contract (Short-Term): $1100 - $1400/day",
+    "role_type": [
+      "Contract",
+      "Permanent"
+    ],
+    "target_industries": [
+      "Banking",
+      "Retail",
+      "Government"
+    ]
+  },
+  "career_goals": "Seeking a role that combines hands-on technical development with strategic system architecture."
+}

@@ -1,0 +1,27 @@
+# .gitignore
+
+# API Keys and Secrets
+.env
+
+# Python generated files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environment
+venv/
+.venv/
+
+# IDE specific files
+.vscode/
+.idea/
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Application temporary directories (optional, depending on your needs)
+# input/jd/Archive/
+# output/cv/Archive/
+# output/url/Archive/
+# session_storage/
