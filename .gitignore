@@ -11,6 +11,7 @@ __pycache__/
 # Virtual environment
 venv/
 .venv/
+test_env/
 
 # IDE specific files
 .vscode/
@@ -21,7 +22,12 @@ venv/
 Thumbs.db
 
 # Application temporary directories (optional, depending on your needs)
-# input/jd/Archive/
-# output/cv/Archive/
-# output/url/Archive/
-# session_storage/
+jd/
+cv/
+url/
+session_storage/
+
+# Temporary files
+temp/
+*.mp3
+*.wav
