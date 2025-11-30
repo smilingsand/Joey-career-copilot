@@ -66,14 +66,26 @@ Joey is built on a **Hub-and-Spoke** architecture, with a central **General Advi
     ```
     *(Note: For local voice support, you may need to install FFmpeg on your system.)*
 
-3.  **Configuration:**
-    * Create a `.env` file in the root directory and add your API keys:
+3.  **Environment Setup:**
+    * Create a `.env` file in the root directory (you can copy `.env.example`) and add your API keys:
         ```env
         GOOGLE_API_KEY=your_google_api_key
         RAPIDAPI_KEY=your_rapidapi_key
         ```
-    * Review `settings.ini` to customize paths, model selection, and default search settings.
-    * Update your user profile in `user_profile.json` and populate your `Skill_Repository/Master_Resume.docx`.
+4.  **Initialization:**
+    * Copy the example configuration file to create your live settings:
+        ```bash
+        # Linux / macOS
+        cp settings.ini.example settings.ini
+        
+        # Windows
+        copy settings.ini.example settings.ini
+        ```
+5.  **Customization:**
+    * **User Profile**: Copy `user_profile.json.example` to `user_profile.json` and update it with your personal details.
+    * **Skill Repository**: Edit the content in `Skill_Repository/Skillset_sample.docx` to reflect your actual skills and experience.
+    * **Configuration Note**: If you rename these files (e.g., using `my_resume.docx` instead), please ensure you update the corresponding filenames in `settings.ini` under the `[Paths]` section.
+
 
 ### Usage
 

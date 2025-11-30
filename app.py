@@ -41,21 +41,30 @@ from services.interview_copilot_service import InterviewCopilotService
 from services.voice_service import VoiceService
 
 # ==========================================
-# Observability & Logging Configuration
+# Observability & Logging Configuration  - 3 level: logging.INFO, logging.WARNING, logging.ERROR
 # ==========================================
-# Set global level to WARNING to reduce noise from third-party libraries
+# 1. Basic config：Keep WARNING level，capture normal system warning
 logging.basicConfig(level=logging.WARNING, format='%(asctime)s - %(message)s')
-logging.getLogger("httpx").setLevel(logging.WARNING)
-logging.getLogger("google_genai").setLevel(logging.WARNING)
-logging.getLogger("google_adk").setLevel(logging.WARNING)
 
-# Enable INFO logging for core business logic to trace Agent reasoning
+# 2. Set global level to ERROR to reduce noise from third-party libraries
+logging.getLogger("httpx").setLevel(logging.ERROR)
+logging.getLogger("httpcore").setLevel(logging.ERROR)
+logging.getLogger("urllib3").setLevel(logging.ERROR)
+
+# 3. Set Google SDK level to ERROR, filter warning message
+logging.getLogger("google_genai").setLevel(logging.ERROR)
+logging.getLogger("google_adk").setLevel(logging.ERROR)
+logging.getLogger("google.generativeai").setLevel(logging.ERROR)
+logging.getLogger("common").setLevel(logging.ERROR) # some Google internal library use common logger
+
+# 4. Enable INFO logging for core business logic to trace Agent reasoning
 logger = logging.getLogger("App")
 logger.setLevel(logging.INFO)
 logging.getLogger("JobScoutService").setLevel(logging.INFO)
 logging.getLogger("MockInterviewService").setLevel(logging.INFO)
 logging.getLogger("InterviewCopilotService").setLevel(logging.INFO)
 logging.getLogger("CVMakerService").setLevel(logging.INFO)
+
 
 # ==========================================
 # Configuration Helpers
@@ -364,6 +373,10 @@ async def main():
         # [State Change] Lock the app into Interview Mode
         app_state["current_job_keyword"] = target_job
         app_state["is_interview_active"] = True
+
+        # [New] 面试开始，换一个新的面试官声音
+        if voice_service.enabled:
+            voice_service.pick_new_interviewer_voice()
         
         info_msg = f"""
 ✅ **Interview Ready!**
@@ -511,10 +524,12 @@ async def main():
             # Send to Agent
             msg = types.UserContent(parts=[types.Part(text=user_input)])
             
-            if not use_voice_input:
-                print("Agent > ", end="", flush=True)
+            # [关键修改] 动态决定 Agent 的显示标签 (Joey 还是 Mary?)
+            current_speaker_label = copilot_name # 默认是 Joey
             
             agent_response_buffer = ""
+            header_printed = False       # [新增] 标记是否已打印头像
+            current_turn_tool = None     # [新增] 记录这一轮调用的工具
             
             # Run Agent Logic
             async for event in runner.run_async(
@@ -522,17 +537,59 @@ async def main():
                 session_id=adk_session_id, 
                 user_id=user_id
             ):
+
                 if event.content and event.content.parts:
                     for part in event.content.parts:
+
+                        # [新增] 检测工具调用，用于决定谁在说话
+                        if part.function_call:
+                            current_turn_tool = part.function_call.name
+                            # ADK 会自动打印工具日志，或者我们可以自己打印
+                            # print(f"[System] Tool Call: {current_turn_tool}")
+
                         if part.text:
-                            print(part.text, end="", flush=True)
-                            agent_response_buffer += part.text
+                            # [修改 2] 收到文本的第一刻，决定打印谁的名字
+                            if not header_printed:
+                                # 默认是 Joey
+                                speaker = copilot_name 
+                                mode_str = "(Voice)" if should_use_voice() else ""
+
+                                # 逻辑判断谁在说话：
+                                # 1. 如果调用了 Copilot -> Joey
+                                if current_turn_tool == "ask_copilot_tool":
+                                    speaker = copilot_name
+                                # 2. 如果调用了 Stop -> Joey (Coach)
+                                elif current_turn_tool == "stop_interview_tool":
+                                    speaker = copilot_name
+                                # 3. 如果正在面试中，且没调用特殊工具 -> Mary
+                                elif app_state["is_interview_active"]:
+                                    speaker = interviewer_name
+                                # 4. 如果刚调用了 Start Interview -> Mary (因为状态刚刚翻转为True)
+                                elif current_turn_tool == "start_mock_interview_tool":
+                                    speaker = interviewer_name
+
+                                print(f"\n{speaker} {mode_str} > ", end="", flush=True)
+                                header_printed = True
+
+                                # [关键修复] 这里必须把文本打印出来！
+                                print(part.text, end="", flush=True)
+                                agent_response_buffer += part.text
+
             print("") 
             
-            # TTS Output
+            # TTS Output by current person
             if should_use_voice() and agent_response_buffer:
-                await voice_service.speak(agent_response_buffer)
+                # 再次确认声音角色 (逻辑同上)
+                voice_persona = "joey"
+                if app_state["is_interview_active"]:
+                    voice_persona = "mary"
+                
+                # 特殊覆盖：如果是 Copilot 或 Stop，强制用 Joey 的声音
+                if current_turn_tool in ["ask_copilot_tool", "stop_interview_tool"]:
+                    voice_persona = "joey"
 
+                await voice_service.speak(agent_response_buffer, persona=voice_persona)
+            
             # Save to Memory
             if enable_long_memory and history_manager and agent_response_buffer:
                 history_manager.add_turn(user_input, agent_response_buffer)
@@ -541,6 +598,7 @@ async def main():
             break
         except Exception as e: 
             logger.error(f"Main Loop Error: {e}")
+
 
 if __name__ == "__main__":
     asyncio.run(main())

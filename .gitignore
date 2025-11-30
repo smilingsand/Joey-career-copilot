@@ -13,6 +13,7 @@ venv/
 .venv/
 test_env/
 
+
 # IDE specific files
 .vscode/
 .idea/
@@ -31,3 +32,12 @@ session_storage/
 temp/
 *.mp3
 *.wav
+
+# direct execute program
+cv_generator.py
+job_scout.py
+
+# setting files
+settings.ini
+user_profile.json
+skill_repository/亮点总结.docx

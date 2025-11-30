@@ -1,0 +1,133 @@
+[Model]
+# Only specify the model version here. The API key is loaded securely from the .env file.
+# This keeps your secrets safe and not hardcoded.
+model_name = gemini-2.0-flash-001
+
+[Memory]
+# Controls whether long-term conversation history is persisted to disk.
+# true = Load/Save history across restarts (Persistent Memory).
+# false = Start fresh every time (Ephemeral Session).
+enable_long_memory = True
+
+# The maximum number of recent conversation turns (User + Agent pairs) to keep in the context window.
+# e.g., 20 turns means the last 40 messages are sent to the LLM.
+# Prevents context overflow and manages token usage.
+context_window_turns = 10
+
+
+[Paths]
+# The project root is the default base. Use relative paths here.
+# Input: Directory for raw data files (Job Descriptions, etc.)
+input_dir = jd
+# Output: Directory for generated artifacts (CVs, Cover Letters, etc.)
+export_dir = cv
+# Output: Directory for JD url in combined file
+url_dir = jd_url
+# Directory for session history and long-term memory storage
+session_dir = sessions
+
+
+# --- User Static Knowledge Base ---
+# The structured JSON file containing basic info and preferences
+profile_filename = user_profile.json.example
+# folder of the unstructured document containing full career history and skill details
+repo_dir = skill_repository
+# The unstructured document containing full career history and skill details
+repo_filename = Skillset_sample.docx
+
+
+# --- System Instructions & Personas ---
+# The TOML structure file defining agent behaviors, prompts, and persona settings
+instruction_file = instruction.txt
+
+
+
+[Workflow]
+# --- Agentic Loop Control ---
+# Safety limit for the Validator-Refiner feedback loop.
+# If the content isn't approved after this many attempts, the loop forces an exit.
+# Prevents infinite loops and excessive token costs.
+max_loop_iterations = 3
+
+
+[Search]
+# --- Job Scout Configuration ---
+# Default search engine used by the 'find_and_download_jobs_tool'.
+# Options: 'linkedin' (Recommended for detail) or 'google' (Broader reach).
+default_engine = linkedin
+# The maximum number of job results to fetch and process in a single batch run.
+# A safety brake to manage API quotas and processing time.
+max_results = 10
+
+
+[RapidAPI]
+# --- External API Endpoints & Limits ---
+# NOTE: Your RAPIDAPI_KEY must be set in the .env file.
+# LinkedIn Job Search API Host
+host_linkedin = linkedin-job-search-api.p.rapidapi.com
+# Pagination Settings
+# LinkedIn: limit per request (max 100)
+linkedin_limit = 10
+# LinkedIn: total records to fetch
+linkedin_max_records = 20
+
+# Google Jobs (JSearch) API Host
+host_google = jsearch.p.rapidapi.com
+# Google: pages per request
+google_num_pages = 1
+# Google: max pages to fetch (1 page = 10 results usually)
+google_max_pages = 1
+
+
+
+[Voice]
+# --- Multimodal Settings (Speech-to-Text & Text-to-Speech) ---
+# Master switch to enable or disable all voice features.
+enabled = True
+# Voice Scope Control:
+# Defines which parts of the system use voice output.
+# Options: 'all' (global), 'mock_interview' (only during interviews), or comma-separated list.
+# Example: scope = mock_interview, interview_copilot
+#scope = mock_interview, interview_copilot
+#scope = all
+scope = mock_interview
+
+
+# Engine Selection:
+# stt_engine: 'google' (Online, faster) OR 'whisper' (Local, private, higher accuracy)
+stt_engine = whisper
+# tts_engine: 'edge-tts' (Text-to-Speech, High-quality neural voices via Microsoft Edge online service)
+tts_engine = edge-tts
+
+# Listening (Only used if stt_engine = google)
+# Language settings for speech recognition and synthesis (Google engine parameter)
+input_language = en-US
+
+# Local Whisper Model Configuration (Only used if stt_engine = whisper)
+# model_size: 'tiny', 'base', 'small', 'medium', 'large-v2' (Larger = more accurate but slower)
+# device: 'cpu' (standard) or 'cuda' (requires NVIDIA GPU)
+# compute_type: 'int8' (optimized for CPU), 'float16' (optimized for GPU)
+whisper_model_size = base.en
+whisper_device = cpu
+whisper_compute_type = int8
+
+# Speak(Text-to-Speech)  (Only used if tts_engine = edge-tts)
+# Playback speed adjustment. e.g., "+0%", "+10%", "-5%".
+speaking_rate = +0%
+
+# Persona voice setting
+# Voice persona for Joey, TTS output (e.g., en-US-AriaNeural, en-AU-NatashaNeural).
+joey_voice = en-AU-NatashaNeural
+# Pool of Voice persona for Mary（Interviewer, more choices）
+# must be supported by EDGE TTS
+# 可以在终端运行 `edge-tts --list-voices` 查看所有可用声音，推荐声音: en-AU-NatashaNeural, en-US-JennyNeural, en-GB-SoniaNeural
+mary_voices_pool = en-US-JennyNeural, en-GB-SoniaNeural, en-US-AriaNeural, en-CA-ClaraNeural, en-IE-EmilyNeural
+
+
+[Personas]
+# Names used in the UI and prompts for persona switching.
+copilot_name = Joey
+# Name of interviewer (Mary，sugget with Richard or Ben if interviewer is male)
+interviewer_name = Mary
+# Optional: User's name for personalized greetings. Leave blank to use name from user_profile.json.
+user_name = Chris
