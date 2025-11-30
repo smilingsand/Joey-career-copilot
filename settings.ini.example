@@ -116,12 +116,12 @@ whisper_compute_type = int8
 speaking_rate = +0%
 
 # Persona voice setting
-# Voice persona for Joey, TTS output (e.g., en-US-AriaNeural, en-AU-NatashaNeural).
-joey_voice = en-AU-NatashaNeural
+# Voice persona for Joey, TTS output (e.g., en-AU-WilliamNeural for male, en-AU-NatashaNeural for female).
+joey_voice = en-AU-WilliamNeural
 # Pool of Voice persona for Mary（Interviewer, more choices）
 # must be supported by EDGE TTS
-# 可以在终端运行 `edge-tts --list-voices` 查看所有可用声音，推荐声音: en-AU-NatashaNeural, en-US-JennyNeural, en-GB-SoniaNeural
-mary_voices_pool = en-US-JennyNeural, en-GB-SoniaNeural, en-US-AriaNeural, en-CA-ClaraNeural, en-IE-EmilyNeural
+# run `edge-tts --list-voices` to find more voices
+mary_voices_pool = en-AU-NatashaNeural, en-US-JennyNeural, en-GB-SoniaNeural, en-US-AriaNeural, en-CA-ClaraNeural, en-IE-EmilyNeural
 
 
 [Personas]
