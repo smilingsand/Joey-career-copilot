@@ -27,7 +27,7 @@ from dotenv import load_dotenv, find_dotenv
 from google.adk.runners import Runner 
 from google.adk.sessions import InMemorySessionService
 from google.adk.tools import FunctionTool 
-import google.generativeai as genai
+from google import genai
 from google.genai import types
 
 # --- Local Context & Agent Modules ---
@@ -58,7 +58,7 @@ logging.getLogger("urllib3").setLevel(logging.ERROR)
 # 3. Set Google SDK level to ERROR, filter warning message
 logging.getLogger("google_genai").setLevel(logging.ERROR)
 logging.getLogger("google_adk").setLevel(logging.ERROR)
-logging.getLogger("google.generativeai").setLevel(logging.ERROR)
+    # Legacy google.generativeai logger removed
 logging.getLogger("common").setLevel(logging.ERROR) # some Google internal library use common logger
 # [新增] 屏蔽 asyncio 的资源清理报错 (Unclosed client session 等)
 # 将其设为 CRITICAL，意味着除非是致命错误，否则忽略普通的 ERROR 报错
@@ -409,13 +409,14 @@ async def main():
         return False
 
     # [关键修复] 初始化用于 Auto-Interview 的独立模型实例
+    # 之前是 genai.GenerativeModel(...)
+    # 现在直接使用 client 即可
     try:
-        genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
-        genai_model = genai.GenerativeModel(model_name=model_name)
-        logger.info("Standalone GenAI Model initialized for Auto-Interview.")
+        client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"), http_options={'api_version': 'v1alpha'})
+        logger.info(f"New Google GenAI Client initialized for Model: {model_name}")
     except Exception as e:
-        logger.error(f"Failed to init standalone model: {e}")
-        genai_model = None
+        logger.error(f"Failed to init GenAI Client: {e}")
+        client = None
 
 
     # ==========================================
@@ -586,10 +587,13 @@ async def main():
         # [修改] 直接获取 Tom 的完整上下文，不需要手动提取变量了
         tom_materials = candidate_service.get_context_materials(target_job)
         
-        # --- 3. 初始化对话 ---
-        mary_chat = genai_model.start_chat(history=[
-            {"role": "user", "parts": [mary_system_prompt + "\n\n(System: Please start the interview now.)"]}
-        ])
+        mary_chat = client.aio.chats.create(
+            model=model_name,
+            history=[
+                types.Content(role="user", parts=[types.Part.from_text(mary_system_prompt + "\n\n(System: Please start the interview now.)")]),
+                types.Content(role="model", parts=[types.Part.from_text("Understood. I am ready.")])
+            ]
+        )
 
         max_turns = auto_interview_max_turns
         current_turn = 0
@@ -616,7 +620,7 @@ async def main():
 
         # --- Mary 开场 ---
         try:
-            response = await mary_chat.send_message_async("Start now.")
+            response = await mary_chat.send_message("Start now.")
             mary_msg = response.text
         except Exception as e: return f"Error starting Mary: {e}"
 
@@ -637,7 +641,7 @@ async def main():
             tom_prompt = candidate_service.generate_answer_prompt(mary_msg, tom_materials)
             
             try:
-                tom_resp = await genai_model.generate_content_async(tom_prompt)
+                tom_resp = await client.aio.models.generate_content(model=model_name, contents=tom_prompt)
                 tom_msg = tom_resp.text
             except Exception as e: 
                 print(f"Tom error: {e}"); break
@@ -648,7 +652,7 @@ async def main():
             
             # --- Mary 反应 ---
             try:
-                response = await mary_chat.send_message_async(tom_msg)
+                response = await mary_chat.send_message(tom_msg)
                 mary_msg = response.text
             except Exception as e: 
                 print(f"Mary error: {e}"); break
@@ -699,8 +703,8 @@ async def main():
         # 3. LLM 生成器回调 (保持不变)
         async def llm_generator(prompt):
             try:
-                if genai_model:
-                    resp = await genai_model.generate_content_async(prompt)
+                if client:
+                    resp = await client.aio.models.generate_content(model=model_name, contents=prompt)
                     return resp.text
                 else:
                     return "Error: LLM Model not initialized."

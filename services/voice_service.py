@@ -25,6 +25,8 @@ import random # Used for random voice selection for Mary
 
 # Audio Libraries
 import speech_recognition as sr
+import os
+os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
 import pygame
 import edge_tts
 import io 
