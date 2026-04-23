@@ -89,9 +89,17 @@ Joey is built on a **Hub-and-Spoke** architecture, with a central **General Advi
 
 ### Usage
 
+0. **Initialize Python Env**
+    ```
+       D:\Code\Python\.venv\Scripts\activate   (3.13. )
+    ```
+
 1.  **Start the application:**
     ```bash
-    python app.py
+       python app.py  (Single application Edition)
+    or python app_cli.py  (client-Server Edition in command line, server is backend_core.py)
+    or streamlit run app_streamlit.py (client-Server Edition in web page, server is backend_core.py)
+
     ```
 
 2.  **Interact with Joey:**

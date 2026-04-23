@@ -219,4 +219,28 @@ class MockInterviewService:
         final_prompt = template.replace("{repo_content}", self.repo_content[:10000])
         return final_prompt
 
+
+    # [新增] 生成静态题库的方法
+    def generate_interview_questions_list(self, materials):
+        """
+        生成【面试题库】指令 (Batch Mode)
+        """
+        context_str = ""
+        
+        # 复用之前的 context 组装逻辑
+        if materials['requirements']:
+            context_str += f"\n**JOB REQUIREMENTS:**\n{materials['requirements']}\n"
+        elif materials['jd_text']:
+            context_str += f"\n**JOB DESCRIPTION:**\n{materials['jd_text'][:3000]}\n"
+            
+        if materials['resume_text']:
+            context_str += f"\n**CANDIDATE RESUME:**\n{materials['resume_text']}\n"
+        if materials['cv_text']:
+            context_str += f"\n**CANDIDATE COVER LETTER:**\n{materials['cv_text']}\n"
+        
+        # 使用 question_list 模板
+        template = self.prompts['question_list']
+        final_prompt = template.replace("{company_name}", materials['company']) \
+                               .replace("{context_materials}", context_str)
+        return final_prompt
         

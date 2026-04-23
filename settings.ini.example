@@ -122,12 +122,20 @@ joey_voice = en-AU-WilliamNeural
 # must be supported by EDGE TTS
 # run `edge-tts --list-voices` to find more voices
 mary_voices_pool = en-AU-NatashaNeural, en-US-JennyNeural, en-GB-SoniaNeural, en-US-AriaNeural, en-CA-ClaraNeural, en-IE-EmilyNeural
+# Voice persona for Tom (CHinese Ascent English Male)
+tom_voice = zh-CN-YunxiNeural
+# [新增] 替身 Richard 的声音 (建议用稳重的男声)
+richard_voice = en-US-GuyNeural
 
 
 [Personas]
 # Names used in the UI and prompts for persona switching.
 copilot_name = Joey
-# Name of interviewer (Mary，sugget with Richard or Ben if interviewer is male)
+# Name of interviewer (Mary，sugget with Ben if interviewer is male)
 interviewer_name = Mary
+# 候选人 AI 分身的名字 (新)
+candidate_name = Tom
+# 候选人 AI 替身的名字 (新)
+avatar_name = Richard
 # Optional: User's name for personalized greetings. Leave blank to use name from user_profile.json.
 user_name = Chris

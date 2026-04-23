@@ -36,6 +36,7 @@ temp/
 # direct execute program
 cv_generator.py
 job_scout.py
+convert_tool*.py
 
 # setting files
 settings.ini

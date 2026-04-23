@@ -1,14 +1,10 @@
 """
 Project: Joey - The Voice-Enabled End-to-End Career Copilot
-File: app.py
+File: backend_core.py
 Description: 
-    This is the Central Hub (Entry Point) of the application. 
-    It acts as the 'Router Agent' responsible for:
-    1. Initializing the Google Gemini Model and ADK Components.
-    2. Orchestrating four specialized services (Job Scout, CV Maker, Mock Interview, Copilot).
-    3. Managing global application state (e.g., Interview Mode vs. General Chat).
-    4. Handling multimodal input/output (Voice/Text).
-    5. Routing user intents to the appropriate Function Tools.
+    [REFACTORED] This module contains the core initialization logic extracted from app.py.
+    It sets up the Services, Agents, Tools, and State Management, but DOES NOT run the interaction loop.
+    It returns a context dictionary to be used by UI frontends (CLI or Streamlit).
 """
 
 import os
@@ -159,39 +155,19 @@ def smart_find_file(user_query: str, directory: str) -> str:
     logger.info(f"Fuzzy Match Success: '{user_query}' -> '{best_match}'")
     return best_match
 
-# [新增] 公共函数：创建面试记录文件路径
-def setup_transcript_file(mode: str, job_title: str, company: str) -> str:
-    """
-    统一生成 Transcript 文件路径。
-    如果 mode 不在允许列表中，返回 None。
-    Format: transcript_{MODE}_{Job}_{Company}_{Time}.txt
-    """
-    # 1. 检查权限
-    if mode.upper() not in enabled_transcript_modes:
-        return None
-
-    # 2. 确保 temp 目录存在
-    if not os.path.exists(transcript_dir):
-            os.makedirs(transcript_dir)
-        
-    # 3. 清洗文件名 (去除非法字符，将空格转为下划线)
-    def clean_name(n):
-        return re.sub(r'[\\/*?:"<>|]', "", str(n)).replace(" ", "_")
-        
-    safe_job = clean_name(job_title)
-    safe_company = clean_name(company)
-    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    
-    # 3. 组合文件名
-    filename = f"transcript_{mode}_{safe_job}_{safe_company}_{timestamp}.txt"
-    return os.path.join(transcript_dir, filename)
-
 
 
 # ==========================================
-# Main Application Loop
+# Core Initialization Logic
 # ==========================================
-async def main():
+# [Changed] Renamed from main() to init_career_copilot()
+# [Changed] Returns a dictionary of objects instead of running a loop
+async def init_career_copilot():
+    """
+    Initializes the entire Career Copilot backend system.
+    Returns a dictionary containing the Runner, Services, State, and Config.
+    """
+
     # 1. Environment Setup
     env_file = find_dotenv()
     if env_file: load_dotenv(env_file, override=True)
@@ -250,7 +226,50 @@ async def main():
         "transcript_path": None # [新增] 记录当前面试的文字记录路径
     }
 
-    # 记录日志的辅助函数
+    # [Helper] Setup Transcript File
+    def setup_transcript_file(mode: str, job_title: str, company: str) -> str:
+        """
+        统一生成 Transcript 文件路径。
+        如果 mode 不在允许列表中，返回 None。
+        Format: transcript_{MODE}_{Job}_{Company}_{Time}.txt
+        """
+        # 1. 检查权限
+        if mode.upper() not in enabled_transcript_modes:
+            return None
+
+        # 2. 确保 temp 目录存在
+        if not os.path.exists(transcript_dir):
+                os.makedirs(transcript_dir)
+            
+        # 3. 清洗文件名 (去除非法字符，将空格转为下划线)
+        def clean_name(n):
+            return re.sub(r'[\\/*?:"<>|]', "", str(n)).replace(" ", "_")
+        
+        # 1. 预处理: 从 job_title 中移除 company (忽略大小写)
+        # 例如: job="TM1 Developer at Reo Group", comp="Reo Group" -> job="TM1 Developer at"
+        if company and company.lower() in job_title.lower():
+            pattern = re.compile(re.escape(company), re.IGNORECASE)
+            job_title = pattern.sub("", job_title)
+            
+        '''
+        # 应该不会出现这类词，所以这段代码不需要
+        # 2. 再次清洗无意义的介词 (at, for, in, of) 以保持文件名整洁
+        # 例如: "TM1 Developer at" -> "TM1 Developer"
+        for prep in [" at ", " for ", " in ", " of "]:
+            pattern = re.compile(prep, re.IGNORECASE)
+            job_title = pattern.sub(" ", job_title)
+        '''
+
+        safe_job = clean_name(job_title)
+        safe_company = clean_name(company)
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            
+        # 3. 组合文件名
+        filename = f"transcript_{mode}_{safe_job}_{safe_company}_{timestamp}.txt"
+        return os.path.join(transcript_dir, filename)
+
+
+    # [Helper] Log to Transcript
     def log_to_transcript(speaker, text):
         """Appends dialogue to the active transcript file if one exists."""
         path = app_state.get("transcript_path")
@@ -261,6 +280,7 @@ async def main():
                     f.write(f"[{timestamp}] {speaker}: {text}\n\n")
             except Exception as e:
                 logger.error(f"Failed to write transcript: {e}")
+
 
 
     logger.info(f"System Initializing... Model: {model_name}")
@@ -276,22 +296,20 @@ async def main():
     else:
         chat_history_text = "No previous conversation history available."
 
-    # 4. Context Loading & Persona Injection
+    # 4. User Context Loading & Persona Injection
     logger.info("Loading user context...")
     repo_path = os.path.join(repo_dir, repo_file)
     user_manager = UserManager(profile_path=profile_file, repo_path=repo_path)
     full_context = user_manager.get_system_context()
     full_repo_text = user_manager.full_skill_text 
     
-    # Determine User Name
     profile_name = user_manager.profile_data.get('basic_info', {}).get('name', '')
     user_name = settings_user_name if settings_user_name else (profile_name if profile_name else 'User')
 
-    # Load Prompt Templates
+    # 5. Instructions
     instruct_config = load_instructions(instruct_file)
     if not instruct_config: return
     
-    # Helper: Inject persona names into raw prompt templates
     def inject_personas(text):
         if not text: return ""
         return text.replace("{copilot_name}", copilot_name)\
@@ -382,22 +400,25 @@ async def main():
         prompts=candidate_prompts
     )
 
-    # Service F: Avatar (Richard) 
-    avatar_service = AvatarService(
-        jd_dir=jd_dir,
-        cv_dir=cv_dir,
-        repo_path=os.path.join(repo_dir, repo_file),
-        voice_service=voice_service,
-        prompts=avatar_prompts
-    )
+    # Service F: Multimodal Interaction (Voice)
+    # =========================================================
+    # [关键修复 / CRITICAL FIX]
+    # 1. 先将 voice_service 定义为 None (防止 try 块失败后变量未定义)
+    # 2. 使用 try-except 块包裹初始化，防止因音频设备问题崩溃
+    # =========================================================
+    voice_service = None
+    try:
+        voice_service = VoiceService()
+        if voice_service.enabled:
+            logger.info(f"Voice Mode Configured (Scope: {voice_service.scope})")
+    except Exception as e:
+        logger.error(f"VoiceService init failed: {e}", exc_info=True)
+        print(f"[ERROR] VoiceService init failed: {e}") # 强制打印到控制台
 
-    # Service G: Multimodal Interaction (Voice)
-    voice_service = VoiceService()
-    if voice_service.enabled:
-        logger.info(f"Voice Mode Configured (Scope: {voice_service.scope})")
 
     # Logic to determine if TTS/STT should be active based on current state
     def should_use_voice():
+        if voice_service is None: return False # Safety check
         if not voice_service.enabled: return False
         if "all" in voice_service.scope: return True
         # Only enable voice if we are in an active interview session
@@ -408,7 +429,16 @@ async def main():
                     return True
         return False
 
-    # [关键修复] 初始化用于 Auto-Interview 的独立模型实例
+    # Service G: Avatar (Richard) 
+    avatar_service = AvatarService(
+        jd_dir=jd_dir,
+        cv_dir=cv_dir,
+        repo_path=os.path.join(repo_dir, repo_file),
+        voice_service=voice_service,
+        prompts=avatar_prompts
+    )
+
+    # Standalone LLM for Auto-Interview
     try:
         genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
         genai_model = genai.GenerativeModel(model_name=model_name)
@@ -625,10 +655,18 @@ async def main():
         await voice_service.speak(mary_msg, persona="mary")
         
         # --- Loop ---
-        while current_turn < max_turns:
+        while True:
             # 检查结束语
             if "goodbye" in mary_msg.lower() or "thank you for your time" in mary_msg.lower():
+                print("\n[System] Mary signaled end of interview.")
+                
+                # [新增] 让 Tom 礼貌道别 (Polite Closing)
+                tom_farewell = "Thank you very much for your time, Mary. I look forward to hearing from you. Goodbye."
+                print(f"\n{candidate_name} (Voice) > {tom_farewell}")
+                log_auto(candidate_name, tom_farewell)
+                if voice_service: await voice_service.speak(tom_farewell, persona="tom")
                 break
+
                 
             # --- Tom 回答 ---
             print(f"\n[System] 🧠 {candidate_name} is thinking...")
@@ -646,6 +684,21 @@ async def main():
             log_auto(candidate_name, tom_msg) # [新增] 记录
             await voice_service.speak(tom_msg, persona="tom")
             
+            current_turn += 1
+
+            # 到达系统规定轮次，结束conversation
+            if current_turn >= max_turns:
+                # print("\n[System] Max turns reached. Signaling Mary to wrap up...")
+                # [关键技巧] 欺骗 Mary，告诉她时间到了，让她说结束语
+                # next_input_for_mary = "\n\n(System: The interview time is up. Please thank the candidate and end the interview now.)"
+                # next_input_for_mary = "\n\n(System: The interview time is up. Please thank the candidate and end the interview now.)" + tom_msg
+                print("\n[System] Max turns reached. Stop the conversation ...")
+                break
+            else:
+                # 正常继续，把 Tom 的话传给 Mary
+                next_input_for_mary = tom_msg
+
+
             # --- Mary 反应 ---
             try:
                 response = await mary_chat.send_message_async(tom_msg)
@@ -657,7 +710,7 @@ async def main():
             log_auto(interviewer_name, mary_msg) # [新增] 记录
             await voice_service.speak(mary_msg, persona="mary")
             
-            current_turn += 1
+
 
         print(f"\n[System] 🏁 Auto-Interview Finished ({current_turn} turns).")
         return "Simulation complete."
@@ -770,159 +823,46 @@ async def main():
     runner = Runner(agent=advisor_agent, app_name=app_name, session_service=session_service)
     await session_service.create_session(session_id=adk_session_id, user_id=user_id, app_name=app_name)
 
-    # 9. Interaction Loop (Main Event Cycle)
-    memory_status_str = f" | 🧠 Memory: {len(history_manager.history)} turns" if (enable_long_memory and history_manager and history_manager.history) else ""
-    
-    # Print Welcome Interface
-    try:
-        welcome_raw = instruct_config["interface"]["welcome_message"]
-        welcome_msg = inject_personas(welcome_raw).replace("{memory_status}", memory_status_str)
-        print(welcome_msg)
-    except KeyError:
-        print(f"\n🤖 Hi {user_name}, {copilot_name} Ready!\n")
-    
-    while True:
-        try:
-            user_input = ""
-            # Check if we should activate the microphone
-            use_voice_input = should_use_voice()
-            
-            if use_voice_input:
-                voice_text = voice_service.listen()
-                if voice_text:
-                    user_input = voice_text
-                    print(f"\n{user_name} (Voice) > {user_input}")
-            
-            # Fallback to keyboard if no voice detected or voice disabled
-            if not user_input:
-                prompt_symbol = "🎤 >" if use_voice_input else ">"
-                user_input = input(f"\n{user_name} {prompt_symbol} ")
-
-            # [Smart Exit Logic]
-            # Handles "Dual-Layer" exit: Stop Interview vs Exit App
-            sentences = re.split(r'[.!?;]+', user_input.lower())
-            exit_keywords = {"exit", "quit", "stop", "bye", "goodbye", "terminate", "shutdown", "end"}
-            is_exit_command = False
-            
-            for sentence in sentences:
-                words = sentence.strip().split()
-                if not words: continue
-                
-                has_exit_word = any(w in exit_keywords for w in words)
-                is_short = len(words) <= 5
-                has_negation = any(w in ["not", "don't", "dont", "never"] for w in words)
-                
-                if has_exit_word and is_short and not has_negation:
-                    is_exit_command = True
-                    break
-
-            if is_exit_command:
-                if app_state["is_interview_active"]:
-                    print("\n[System] Detected exit command. Ending interview session...")
-                    # Redirect intent to stop_interview_tool
-                    user_input = "Stop interview and give feedback."
-                else:
-                    print("Bye!")
-                    break
-            
-            if not user_input.strip(): continue
-
-            # [新增] 在这里记录用户的输入
-            # 如果在面试中 (有 transcript_path)，则记录对话
-            if app_state.get("transcript_path"):
-                log_to_transcript(user_name, user_input)
-
-
-            # Send to Agent
-            msg = types.UserContent(parts=[types.Part(text=user_input)])
-            
-            # [关键修改] 动态决定 Agent 的显示标签 (Joey 还是 Mary?)
-            current_speaker_label = copilot_name # 默认是 Joey
-            
-            agent_response_buffer = ""
-            header_printed = False       # [新增] 标记是否已打印头像
-            current_turn_tool = None     # [新增] 记录这一轮调用的工具
-            
-            # Run Agent Logic
-            async for event in runner.run_async(
-                new_message=msg, 
-                session_id=adk_session_id, 
-                user_id=user_id
-            ):
-
-                if event.content and event.content.parts:
-                    for part in event.content.parts:
-
-                        # [新增] 检测工具调用，用于决定谁在说话
-                        if part.function_call:
-                            current_turn_tool = part.function_call.name
-                            # ADK 会自动打印工具日志，或者我们可以自己打印
-                            # print(f"[System] Tool Call: {current_turn_tool}")
-
-                        if part.text:
-                            # [修改 2] 收到文本的第一刻，决定打印谁的名字
-                            if not header_printed:
-                                # 默认是 Joey
-                                speaker = copilot_name 
-                                mode_str = "(Voice)" if should_use_voice() else ""
-
-                                # 逻辑判断谁在说话：
-                                # 1. 如果调用了 Copilot -> Joey
-                                if current_turn_tool == "ask_copilot_tool":
-                                    speaker = copilot_name
-                                # 2. 如果调用了 Stop -> Joey (Coach)
-                                elif current_turn_tool == "stop_interview_tool":
-                                    speaker = copilot_name
-                                # 3. 如果正在面试中，且没调用特殊工具 -> Mary
-                                elif app_state["is_interview_active"]:
-                                    speaker = interviewer_name
-                                # 4. 如果刚调用了 Start Interview -> Mary (因为状态刚刚翻转为True)
-                                elif current_turn_tool == "start_mock_interview_tool":
-                                    speaker = interviewer_name
-
-                                print(f"\n{speaker} {mode_str} > ", end="", flush=True)
-                                header_printed = True
-
-                            # [关键修复] 这里必须把文本打印出来！
-                            print(part.text, end="", flush=True)
-                            agent_response_buffer += part.text
-
-            print("") 
-
-            # [新增] 记录 Agent 的回复
-            if agent_response_buffer and app_state.get("transcript_path"):
-                # 确定记录在文件里的说话人名字
-                record_speaker = copilot_name
-                if app_state["is_interview_active"]: record_speaker = interviewer_name
-                if current_turn_tool == "ask_copilot_tool": record_speaker = f"{copilot_name} (Copilot)"
-                if current_turn_tool == "stop_interview_tool": record_speaker = f"{copilot_name} (Coach)"
-                
-                log_to_transcript(record_speaker, agent_response_buffer)
-
-            
-            # TTS Output by current person
-            if should_use_voice() and agent_response_buffer:
-                # 再次确认声音角色 (逻辑同上)
-                voice_persona = "joey"
-                if app_state["is_interview_active"]:
-                    voice_persona = "mary"
-                
-                # 特殊覆盖：如果是 Copilot 或 Stop，强制用 Joey 的声音
-                if current_turn_tool in ["ask_copilot_tool", "stop_interview_tool"]:
-                    voice_persona = "joey"
-
-                await voice_service.speak(agent_response_buffer, persona=voice_persona)
-            
-            # Save to Memory
-            if enable_long_memory and history_manager and agent_response_buffer:
-                history_manager.add_turn(user_input, agent_response_buffer)
-
+    # ========================
+    # start to deleted
+    '''
+        # 9. Interaction Loop (Main Event Cycle)
+        memory_status_str = f" | 🧠 Memory: {len(history_manager.history)} turns" if (enable_long_memory and history_manager and history_manager.history) else ""
+        
+        ...
+        ...
+        
         except KeyboardInterrupt: 
             break
         except Exception as e: 
             logger.error(f"Main Loop Error: {e}")
+    '''
+    # end to deleted
+    # =========================
+
+    # [Return backend context]
+    # This dictionary contains everything the UI (CLI or Streamlit) needs to function.
+    return {
+        "runner": runner,
+        "voice_service": voice_service,
+        "adk_session_id": adk_session_id,
+        "user_id": user_id,
+        "app_state": app_state,
+        "history_manager": history_manager,
+        "enable_long_memory": enable_long_memory,
+        "user_name": user_name,
+        "copilot_name": copilot_name,
+        "interviewer_name": interviewer_name,
+        "candidate_name": candidate_name,
+        "avatar_name" : avatar_name,
+        "instruct_config": instruct_config,
+        "should_use_voice": should_use_voice,
+        "log_to_transcript": log_to_transcript
+    }
+
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
-    
+    # For testing, run the CLI directly
+    # In the new architecture, you would run app_cli.py instead
+    print("Please run 'app_cli.py' to start the application.")

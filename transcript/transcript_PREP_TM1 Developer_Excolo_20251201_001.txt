@@ -1,0 +1,28 @@
+Joey  > Here is a list of interview questions for the TM1 Developer role at Excolo, Chris:
+
+### Role-Specific / Technical Skills
+*   Can you describe your experience in designing and building TM1 cubes and dimensions, specifically referencing a complex project where you optimized the structure for performance?
+*   Walk me through your process for developing and maintaining TurboIntegrator (TI) processes, especially for data loads, transformations, and automation. How do you ensure data integrity during these processes?
+*   How do you approach translating complex finance requirements into scalable TM1 solutions? Can you give an example of a time you did this for budgeting or forecasting?
+*   Describe your experience with creating reports and dashboards using Planning Analytics Workspace (PAW) and Planning Analytics for Excel (PAfE). What considerations do you take into account for user-friendliness and actionable insights?
+*   Can you discuss your understanding of SQL, ETL, and data modeling concepts? How have you applied these in your TM1 development work?
+*   The job description mentions exposure to TM1 developer toolsets such as Pulse or Bedrock. Can you share any experience you have with these or similar tools, or how you would go about leveraging them?
+*   How do you manage chores and basic integrations within TM1, and what is your experience with the TM1 REST API?
+*   What steps do you take to provide technical support and document workflows and system designs to ensure clarity and maintainability?
+*   Given your "Star TM1 Project" on GitHub, can you explain the technical challenges you aimed to solve and the benefits of transforming TM1 cube data into star-schema format for other BI tools?
+
+### Behavioural & Situational (STAR)
+*   Tell me about a time you faced a significant technical challenge in a TM1 development project. How did you approach problem-solving, and what was the outcome?
+*   Describe a situation where you had to integrate data from multiple disparate source systems into TM1. What challenges did you encounter, and how did you ensure data accuracy and completeness?
+*   Can you share an example of a time when your TM1 solution directly led to a measurable improvement in efficiency or accuracy for a finance or operations team?
+*   Tell me about a time you received feedback on your work that was critical. How did you handle it, and what did you learn from the experience?
+
+### Leadership & Collaboration
+*   How do you typically collaborate with business stakeholders to gather requirements and ensure the TM1 solution aligns with their needs? Can you provide a specific example?
+*   Describe your experience in providing training and support to end-users to enhance their adoption and utilization of TM1/Planning Analytics solutions.
+*   The role involves working closely with internal specialists. How do you ensure effective communication and collaboration within a technical team?
+
+### Culture-Add & Values Alignment
+*   Excolo values trust and integrity. How do you demonstrate these values in your professional work, particularly when dealing with complex data or sensitive financial information?
+*   How do you stay current with the latest TM1 features, industry best practices, and emerging technologies in the EPM space?
+*   What interests you most about working with a major client in the property industry, and how do you see your skills contributing to their specific planning, forecasting, and reporting needs?

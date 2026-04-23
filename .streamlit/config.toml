@@ -1,0 +1,8 @@
+[server]
+headless = false  # [关键] 设置为 false 以允许自动打开浏览器
+port = 8501       # 默认端口
+
+[browser]
+gatherUsageStats = false # 关闭数据收集和 Email 提示
+serverAddress = "localhost"
+serverPort = 8501

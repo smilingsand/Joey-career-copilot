@@ -18,6 +18,7 @@ from docx import Document
 from docx.shared import Pt
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml.ns import qn
+from docx.shared import Pt
 import PyPDF2
 
 class FileLoader:
@@ -78,6 +79,13 @@ class FileLoader:
         Feature:
         It implements a mini-parser to translate Markdown-style bold syntax (**text**)
         into actual Word document bold formatting.
+
+        Updated formatting:
+        - Font: DengXian (Equally for English and East Asian)
+        - Size: 11 pt
+        - Alignment: Justified
+        - Line Spacing: 1.16
+        - Spacing: Before 0pt, After 8pt
         """
         try:
             doc = Document()
@@ -91,8 +99,16 @@ class FileLoader:
                     continue # Skip empty lines to avoid huge gaps
 
                 p = doc.add_paragraph()
-                # Use Justify alignment for professional look
+
+                # --- 1. 修改段落格式 (Paragraph Format) ---
+                # 两侧对齐
                 p.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+                # 行间距 = 1.16倍
+                p.paragraph_format.line_spacing = 1.16
+                # 段前 0 磅
+                p.paragraph_format.space_before = Pt(0)
+                # 段后 8 磅
+                p.paragraph_format.space_after = Pt(8)
 
                 # --- Markdown Bold Parsing Logic ---
                 # The string is split by '**'.
@@ -105,17 +121,21 @@ class FileLoader:
                     if not part: continue 
                     
                     run = p.add_run(part)
+
+                    # --- 2. 修改字体格式 (Font Format) ---
+                    # 设置字号 11
+                    run.font.size = Pt(11)
+                    # 设置西文字体为 等线 (DengXian)
+                    run.font.name = 'DengXian'
+                    # 设置中文字体为 等线 (DengXian)
+                    # 这一步对于显示中文至关重要
+                    r = run._element
+                    r.rPr.rFonts.set(qn('w:eastAsia'), 'DengXian')
                     
                     # If index is odd, it was surrounded by **, so make it bold.
                     if i % 2 == 1:
                         run.bold = True
                         # Optional: Add color or font size tweaks here if needed
-                    
-                    # Ensure standard font across runs
-                    # (This setup ensures compatibility with Asian fonts if needed)
-                    run.font.name = 'Calibri' 
-                    r = run._element
-                    r.rPr.rFonts.set(qn('w:eastAsia'), 'SimSun')
 
             doc.save(file_path)
             self.logger.info(f"Saved Docx: {file_path}")

@@ -12,7 +12,7 @@ Description:
     2. Engine Initialization: Instantiates the appropriate concrete client wrappers (e.g., EdgeTTSClient, WhisperSTTClient) based on configuration.
     3. Unified API: Provides simple `speak(text, persona)` and `listen()` async methods for the rest of the system.
     4. Scope Control: Manages when voice features are active based on the configured 'scope' (e.g., 'all', 'mock_interview').
-    # [NEW] 5. Persona Management: Handles switching voices between Joey (fixed) and Mary (randomized pool).
+    5. Persona Management: Handles switching voices between Joey (fixed), Mary (randomized pool), and Tom (fixed).
 """
 import os
 import logging
@@ -21,80 +21,95 @@ import configparser
 import uuid
 import tempfile
 import time
-import random # [新增] 用于随机选择声音
+import random # Used for random voice selection for Mary
 
-# 音频底层库
+# Audio Libraries
 import speech_recognition as sr
 import pygame
 import edge_tts
-import io # 用于内存流处理
+import io 
 
-# 延迟加载 Whisper 以加快启动
+# Lazy load Whisper to speed up startup
 # from faster_whisper import WhisperModel
 
 logger = logging.getLogger("VoiceService")
 
 class VoiceService:
-    def __init__(self):
-        self.config = self._load_config()
-        # 使用 getboolean 安全读取开关
-        self.enabled = self.config.getboolean('Voice', 'enabled', fallback=False)
+    """
+    Central service for handling voice input (STT) and output (TTS).
+    Now handles switching between different underlying engines and manages 
+    voice personas (Joey, Mary, Tom).
+    """
 
-        # [新增] 临时文件目录管理
+    def __init__(self):
+        """
+        Initialize the Voice Service.
+        Loads configuration and sets up TTS/STT clients if voice is enabled.
+        """
+        self.config = self._load_config()
+        # Use getboolean for safe boolean parsing
+        self.enabled = self.config.getboolean('Voice', 'enabled', fallback=False)
+        
+        # [NEW] Temp directory management
         self.temp_dir = os.path.join(os.getcwd(), "temp")
         if not os.path.exists(self.temp_dir):
             os.makedirs(self.temp_dir)
         
-        # STT 配置
+        # STT Config
         self.stt_engine = self.config.get('Voice', 'stt_engine', fallback='google').lower()
-        self.input_lang = self.config.get('Voice', 'input_language', fallback='en-US')
+        self.input_lang = self.config.get('Voice', 'input_language', fallback='en-US') # Google uses en-US
         
-        # Whisper 专属配置
-        self.whisper_size = self.config.get('Voice', 'whisper_model_size', fallback='base.en')
-        self.whisper_device = self.config.get('Voice', 'whisper_device', fallback='cpu')
-        self.whisper_type = self.config.get('Voice', 'whisper_compute_type', fallback='int8')
-        self.whisper_model = None   # Lazy loaded to save startup time
+        # Whisper Config
+        self.whisper_size = self.config.get('Voice', 'whisper_model_size', fallback='base.en').lower()
+        self.whisper_device = self.config.get('Voice', 'whisper_device', fallback='cpu').lower()
+        self.whisper_type = self.config.get('Voice', 'whisper_compute_type', fallback='int8').lower()
+        self.whisper_model = None # Lazy load
 
-        # TTS 配置
+        # TTS Config
         self.tts_engine = self.config.get('Voice', 'tts_engine', fallback='edge-tts').lower()
+        # [Fix] Use raw config reading to avoid % interpolation error
+        # The _load_config helper already handles this, so direct access is safe here if loaded correctly
         self.rate = self.config.get('Voice', 'speaking_rate', fallback='+0%')
         
-        # Persona Voices
-        # Joey: fixed voice
-        self.joey_voice = self.config.get('Voice', 'joey_voice', fallback='en-AU-NatashaNeural')
+        # --- Persona Voice Configuration ---
+        # Joey: Fixed voice (System/Copilot)
+        self.joey_voice = self.config.get('Voice', 'joey_voice', fallback='en-AU-NatashaNeural').strip()
         
-        # Mary: voice pool (comma to seperate -> list)
+        # [NEW] Tom: Fixed Voice (Candidate)
+        self.tom_voice = self.config.get('Voice', 'tom_voice', fallback='zh-CN-YunxiNeural').strip()
+
+        # Mary: Voice Pool (Interviewer)
         mary_pool_str = self.config.get('Voice', 'mary_voices_pool', fallback='en-US-JennyNeural, en-GB-SoniaNeural')
         self.mary_voices_pool = [v.strip() for v in mary_pool_str.split(',') if v.strip()]
+        
+        # Current Interviewer Voice (Dynamically determined at runtime)
         self.current_mary_voice = None
         
-        # Scope
+        # Scope (Lowercase for easier matching)
         raw_scope = self.config.get('Voice', 'scope', fallback='all').lower()
         self.scope = [s.strip() for s in raw_scope.split(',')]
         
-        # Initialize Microphone Recognizer
+        # Recognizer Init
         self.recognizer = sr.Recognizer()
-
-        # Optimization: Increase pause threshold to 1.5s (default 0.8s)
-        # This allows the user to pause/think while speaking without cutting off the recording.
         self.recognizer.pause_threshold = 1.5 
         self.recognizer.energy_threshold = 300
         self.recognizer.dynamic_energy_threshold = True
         
-        # Initialize Pygame Mixer for Playback
+        # Pygame Mixer Init
         try:
             pygame.mixer.init()
         except Exception as e:
             logger.error(f"Pygame mixer init failed: {e}")
 
+
     def _load_config(self):
-        # 禁用插值以支持 % 符号
+        # Disable interpolation to support '%' symbol in speaking_rate
         config = configparser.ConfigParser(interpolation=None)
         config.read("settings.ini", encoding='utf-8')
         return config
 
     def _ensure_whisper_loaded(self):
-        """仅当使用 Whisper 时才加载模型"""
+        """Lazy load Whisper model to save memory."""
         if self.stt_engine == 'whisper' and self.whisper_model is None:
             print(f"[System] 🧠 Loading Whisper model '{self.whisper_size}'... (One-time setup)")
             from faster_whisper import WhisperModel
@@ -105,50 +120,44 @@ class VoiceService:
             )
 
     def pick_new_interviewer_voice(self):
-        """
-        [Persona Management]
-        Selects a random voice for Mary from the pool to vary the interview experience.
-        """
+        """Select a random voice for Mary from the pool."""
         if self.mary_voices_pool:
-            # 尝试选一个和上次不一样的
+            # Try to pick a different voice than the last one
             new_voice = random.choice(self.mary_voices_pool)
             if len(self.mary_voices_pool) > 1 and new_voice == self.current_mary_voice:
                  new_voice = random.choice(self.mary_voices_pool)
+            
             self.current_mary_voice = new_voice
-            # print(f"[System] 🎤 New Interviewer Voice Selected: {self.current_mary_voice}")
         else:
-            self.current_mary_voice = self.joey_voice
+            self.current_mary_voice = self.joey_voice # Fallback
 
+    # for local Microphone Only, 阻塞式的麦克风监听
     def listen(self):
         """
-        [Core STT Method] Captures audio from microphone and transcribes it.
-        
-        Workflow:
-        1. Calibrate ambient noise.
-        2. Listen (record) until silence is detected.
-        3. Transcribe using the selected engine (Google or Whisper).
+        Listen and transcribe using Google or Whisper.
         """
         if not self.enabled: return None
 
-        # Ensure model is ready if using local engine
-        if self.stt_engine == 'whisper': self._ensure_whisper_loaded()
+        if self.stt_engine == 'whisper':
+            self._ensure_whisper_loaded()
 
         print(f"\n🎤 [Voice Mode: {self.stt_engine.upper()}] Calibrating noise... (Silence)")
         
         try:
             with sr.Microphone() as source:
                 self.recognizer.adjust_for_ambient_noise(source, duration=0.8)
+                
                 print("🎤 LISTENING... (Speak now)")
                 
-                # Start recording. timeout=5 means wait 5s for speech to start.
-                # phrase_time_limit=None allows infinite length recording (until pause).
+                # Recording strategy
                 audio = self.recognizer.listen(source, timeout=5, phrase_time_limit=None)
+                
                 print("   ... Processing ...")
                 
-                # --- Branch A: Google Web API (Online) ---
+                # === Branch A: Google Web API ===
                 if self.stt_engine == 'google':
                     try:
-                        # [NOTE] Google uses full locale code like 'en-US'
+                        # Google needs full locale code (e.g., en-US)
                         text = self.recognizer.recognize_google(audio, language=self.input_lang)
                         return text
                     except sr.UnknownValueError:
@@ -158,23 +167,22 @@ class VoiceService:
                         print("   ❌ Google API Error.")
                         return None
 
-                # --- Branch B: Faster-Whisper (Local) ---
+                # === Branch B: Local Whisper ===
                 elif self.stt_engine == 'whisper':
-                    # Dump audio to temp file for Whisper
+                    # Dump audio to temp file in 'temp' directory
                     temp_wav_path = os.path.join(self.temp_dir, f"stt_{uuid.uuid4().hex[:6]}.wav")
                     
                     try:
                         with open(temp_wav_path, "wb") as f:
                             f.write(audio.get_wav_data())
-
-                        # [Fix] Parse language code for Whisper
-                        # Google uses 'en-US', Whisper expects just 'en'
-                        whisper_lang = self.input_lang.split('-')[0]
-
+                        
+                        # [Fix] Parse language code for Whisper (en-US -> en)
+                        whisper_lang = self.input_lang.split('-')[0].lower()
+                        
                         segments, _ = self.whisper_model.transcribe(
                             temp_wav_path, 
                             beam_size=5,
-                            language=whisper_lang # [Added] Explicitly pass language
+                            language=whisper_lang 
                         )
                         text = " ".join([segment.text for segment in segments]).strip()
                         return text
@@ -182,7 +190,7 @@ class VoiceService:
                         logger.error(f"Whisper Error: {e}")
                         return None
                     finally:
-                        if os.path.exists(temp_wav_path): os.remove(temp_wav_path)
+                        self._cleanup_file(temp_wav_path)
                 
                 else:
                     print(f"   ❌ Unknown STT Engine: {self.stt_engine}")
@@ -195,43 +203,64 @@ class VoiceService:
             logger.error(f"Mic error: {e}")
             return None
 
-    # [修改] 增加 persona 参数，支持动态声音
+    # [新增] 专门给 Streamlit 用的接口
+    def transcribe_file(self, audio_file_path):
+        """
+        直接转录一个音频文件（而不是从麦克风听）
+        """
+        if self.stt_engine == 'whisper':
+            self._ensure_whisper_loaded()
+            segments, _ = self.whisper_model.transcribe(audio_file_path)
+            return " ".join([s.text for s in segments]).strip()
+            
+        elif self.stt_engine == 'google':
+            # 使用 speech_recognition 读取文件
+            with sr.AudioFile(audio_file_path) as source:
+                audio = self.recognizer.record(source)
+                return self.recognizer.recognize_google(audio, language=self.input_lang)
+
     async def speak(self, text: str, persona: str = "joey"):
         """
-        [Core TTS Method] Converts text to speech and plays it.
-        
+        Speak text using the specified persona's voice.
         Args:
-            text: The string to be spoken.
-            persona: 'joey' (default) or 'mary'.
+            text: Content to speak.
+            persona: 'joey', 'mary', or 'tom'.
         """
         if not self.enabled or not text: return
 
-        # Clean Markdown symbols (*, #) as they sound bad when read aloud
+        # Clean text for TTS
         clean_text = text.replace("*", "").replace("#", "").replace("=", "").replace("-", " ")
         
-        # Select Voice based on Persona
-        selected_voice = self.joey_voice # 默认 Joey
+        # 1. Determine Voice based on Persona
+        selected_voice = self.joey_voice # Default (Joey)
         
         if persona.lower() == "mary":
             if self.current_mary_voice is None:
                 self.pick_new_interviewer_voice()
             selected_voice = self.current_mary_voice
-        
-        if self.tts_engine == 'edge-tts':
-            # Generate a unique temp filename
-            temp_file = os.path.join(self.temp_dir, f"tts_{uuid.uuid4().hex[:6]}.mp3")
+            
+        elif persona.lower() == "tom":
+            # [NEW] Use Tom's voice from config
+            selected_voice = self.tom_voice
 
+        else:
+            selected_voice = self.joey_voice # Default (Joey)
+        
+        # 2. Execute TTS (Edge-TTS)
+        if self.tts_engine == 'edge-tts':
+            # Use temp file in 'temp' directory
+            temp_file = os.path.join(self.temp_dir, f"tts_{uuid.uuid4().hex[:6]}.mp3")
+            
             try:
-                # Generate MP3 using Edge-TTS
+                # Generate MP3
                 communicate = edge_tts.Communicate(clean_text, selected_voice, rate=self.rate)
                 await communicate.save(temp_file)
-
+                
                 # Play Audio
                 self._play_audio(temp_file)
             except Exception as e:
                 logger.error(f"EdgeTTS Error: {e}")
             finally:
-                # Cleanup
                 self._cleanup_file(temp_file)
         else:
             logger.warning(f"Unknown TTS Engine: {self.tts_engine}")
@@ -239,20 +268,19 @@ class VoiceService:
     def _play_audio(self, file_path):
         """Plays audio file using Pygame mixer."""
         try:
-            # ensure mixer initialization
+            # Ensure mixer is initialized
             if not pygame.mixer.get_init():
                 pygame.mixer.init()
                 
             pygame.mixer.music.load(file_path)
             pygame.mixer.music.play()
             
-            # Blocking loop to wait for playback to finish
+            # Blocking wait
             while pygame.mixer.music.get_busy():
                 time.sleep(0.1) 
-
-            # Unload to release file lock (crucial on Windows), quit() 可以强制释放
+            
+            # Unload to release file lock
             pygame.mixer.music.unload()
-                
         except Exception as e:
             logger.error(f"Audio Playback Error: {e}")
 
@@ -262,6 +290,6 @@ class VoiceService:
             if os.path.exists(file_path):
                 os.remove(file_path)
         except PermissionError:
-            # File might still be locked by OS/Player, ignore for now
             pass
         except Exception: pass
+
