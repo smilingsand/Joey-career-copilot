@@ -98,7 +98,9 @@ Joey is built on a **Hub-and-Spoke** architecture, with a central **General Advi
     ```bash
        python app.py  (Single application Edition)
     or 
-       python app_cli.py  (application and core seperated model, server definition stays in backend_core.py, which will be imported while app_cli.py starts)
+       python app_cli.py  (application/core seperated model, core definition stays in backend_core.py, which will be imported while app_cli.py starts)
+    or
+       streamlit run app_streamlit.py (application and core seperated model, Web browser Edition)
 
     ```
 

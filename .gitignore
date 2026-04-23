@@ -23,9 +23,10 @@ test_env/
 Thumbs.db
 
 # Application temporary directories (optional, depending on your needs)
+jd_url/
 jd/
 cv/
-url/
+transcript/
 session_storage/
 
 # Temporary files
@@ -37,6 +38,9 @@ temp/
 cv_generator.py
 job_scout.py
 convert_tool*.py
+
+# Docs and 说明
+执行程序说明.docx
 
 # setting files
 settings.ini
